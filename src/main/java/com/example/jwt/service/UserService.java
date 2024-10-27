@@ -3,11 +3,13 @@ package com.example.jwt.service;
 import com.example.jwt.model.Role;
 import com.example.jwt.model.Token;
 import com.example.jwt.model.User;
+import com.example.jwt.producer.RabbitMQProducer;
 import com.example.jwt.repository.TokenRepository;
 import com.example.jwt.repository.UserRepository;
 import com.example.jwt.request.CreateUserRequest;
 import com.example.jwt.response.CreateUserResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -19,20 +21,14 @@ import java.util.Optional;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class UserService implements UserDetailsService {
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder bCryptPasswordEncoder;
     private final JwtService jwtService;
     private final TokenRepository tokenRepository;
-
-
-    public UserService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder, JwtService jwtService, TokenRepository tokenRepository) {
-        this.userRepository = userRepository;
-        this.bCryptPasswordEncoder = bCryptPasswordEncoder;
-        this.jwtService = jwtService;
-        this.tokenRepository = tokenRepository;
-    }
+    private final RabbitMQProducer rabbitMQProducer;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -65,6 +61,7 @@ public class UserService implements UserDetailsService {
         var token = jwtService.generateToken(registeredUser.getUsername());
         registeredUser.setToken(token);
         saveToken(registeredUser, token);
+        rabbitMQProducer.sendWelcomeEmailToQueue(newUser.getEmail());
         return CreateUserResponse.builder()
                 .user(registeredUser)
                 .message("User created successfully").build();
